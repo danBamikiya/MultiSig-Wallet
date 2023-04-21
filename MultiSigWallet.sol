@@ -7,12 +7,17 @@ contract MultiSigWallet {
     event Approve(address indexed owner, uint indexed txId);
     event Revoke(address indexed owner, uint indexed txId);
     event Execute(uint indexed txId);
+    event Cancel(uint indexed txId);
+    event AddOwner(address indexed owner);
+    event RemoveOwner(address indexed owner);
 
     struct Transaction {
         address to;
         uint value;
         bytes data;
         bool executed;
+        uint expiresAfter;
+        bool cancelled;
     }
 
     address[] public owners;
@@ -21,6 +26,7 @@ contract MultiSigWallet {
 
     Transaction[] public transactions;
     mapping(uint => mapping(address => bool)) public approved;
+    mapping(uint => mapping(address => uint)) public approvalTimestamp;
 
     modifier onlyOwner() {
         require(isOwner[msg.sender], "not owner");
@@ -39,6 +45,16 @@ contract MultiSigWallet {
 
     modifier notExecuted(uint _txId) {
         require(!transactions[_txId].executed, "tx already executed");
+        _;
+    }
+
+    modifier notCancelled(uint _txId) {
+        require(!transactions[_txId].cancelled, "tx already cancelled");
+        _;
+    }
+
+    modifier notExpired(uint _txId) {
+        require(block.timestamp < transactions[_txId].expiresAfter, "transaction has expired");
         _;
     }
 
@@ -64,18 +80,23 @@ contract MultiSigWallet {
         emit Deposit(msg.sender, msg.value);
     }
 
-    function submit(address _to, uint _value, bytes calldata _data) external onlyOwner {
+    function submit(address _to, uint _value, bytes calldata _data, uint _expiresAfter) external onlyOwner {
+        require(_expiresAfter > 0, "expiration time must be greater than 0");
+
         transactions.push(Transaction({
             to: _to,
             value: _value,
             data: _data,
-            executed: false
+            executed: false,
+            expiresAfter: block.timestamp + _expiresAfter,
+            cancelled: false
         }));
         emit Submit(transactions.length - 1);
     }
 
-    function approve(uint _txId) external onlyOwner txExists(_txId) notApproved(_txId) notExecuted(_txId) {
+    function approve(uint _txId) external onlyOwner txExists(_txId) notApproved(_txId) notExecuted(_txId) notExpired(_txId) {
         approved[_txId][msg.sender] = true;
+        approvalTimestamp[_txId][msg.sender] = block.timestamp;
         emit Approve(msg.sender, _txId);
     }
 
@@ -89,7 +110,7 @@ contract MultiSigWallet {
         return count;
     }
 
-    function execute(uint _txId) external txExists(_txId) notExecuted(_txId) {
+    function execute(uint _txId) external txExists(_txId) notExecuted(_txId) notCancelled(_txId) notExpired(_txId) {
         require(_getApprovalCount(_txId)>= required, "approvals < required");
         Transaction storage transaction = transactions[_txId];
 
@@ -101,7 +122,14 @@ contract MultiSigWallet {
        emit Execute(_txId);
     }
 
-    function revoke(uint _txId) external onlyOwner txExists(_txId) notExecuted(_txId) {
+    function cancel(uint _txId) external txExists(_txId) onlyOwner notExecuted(_txId) notCancelled(_txId) notExpired(_txId) {
+        Transaction storage transaction = transactions[_txId];
+        transaction.cancelled = true;
+
+        emit Cancel(_txId);
+    }
+
+    function revoke(uint _txId) external onlyOwner txExists(_txId) notExecuted(_txId) notExpired(_txId) notCancelled(_txId) {
         require(approved[_txId][msg.sender], "tx not approved");
         approved[_txId][msg.sender] = false;
         emit Revoke(msg.sender, _txId);

@@ -129,6 +129,31 @@ contract MultiSigWallet {
         emit Cancel(_txId);
     }
 
+    function addOwner(address _owner) external onlyOwner {
+        require(_owner != address(0), "invalid owner");
+        require(!isOwner[_owner], "owner already exists");
+
+        isOwner[_owner] = true;
+        owners.push(_owner);
+        emit AddOwner(_owner);
+    }
+
+    function removeOwner(address _owner) external onlyOwner {
+        require(isOwner[_owner], "owner does not exists");
+        require(owners.length - 1 >= required, "cannot remove owner, minimum number of owners reached");
+
+        isOwner[_owner] = false;
+        for (uint i; i < owners.length - 1; i++) {
+            if (owners[i] == _owner) {
+                owners[i] = owners[owners.length - 1];
+                break;
+            }
+        }
+        owners.pop();
+
+        emit RemoveOwner(_owner);
+    }
+
     function revoke(uint _txId) external onlyOwner txExists(_txId) notExecuted(_txId) notExpired(_txId) notCancelled(_txId) {
         require(approved[_txId][msg.sender], "tx not approved");
         approved[_txId][msg.sender] = false;

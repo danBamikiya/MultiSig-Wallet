@@ -25,6 +25,8 @@ To submit a new transaction to the wallet, call the `submit` function on the con
 
 `data` (bytes): Any additional data to include in the transaction.
 
+`expiresAfter` (uint): The number of seconds until the transaction expires.
+
 #### Approving a Transaction
 
 To approve a pending transaction, call the `approve` function on the contract and provide the following parameter:
@@ -42,3 +44,13 @@ Once a transaction has been approved by the required number of owners, it can be
 If an owner has previously approved a transaction but wishes to revoke their approval, they can do so by calling the `revoke` function on the contract and providing the following parameter:
 
 - `txId` (uint): The ID of the transaction to revoke approval for.
+
+### Cancelling a Transaction
+
+If a transaction is no longer needed or has become invalid, it can be cancelled by calling the `cancel` function on the contract and providing the following parameter:
+
+- `txId` (uint): The ID of the transaction to cancel.
+
+### Adding or Removing Owners
+
+Owners can be added or removed from the MultiSigWallet by calling the `addOwner` or `removeOwner` functions, respectively. To add an owner, provide the Ethereum address of the new owner. To remove an owner, provide the Ethereum address of the owner to be removed.
